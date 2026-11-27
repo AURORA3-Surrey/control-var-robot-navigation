@@ -13,6 +13,7 @@ from nav_utils import (PoseFusion, TimedNode, TwistSender, add_yaw_offset_argume
                        stop_on_signals, yaw_from_quaternion)
 from motion_commands import TrackingCorrection
 
+VICON_FRESH = 0.2  # [s] vicon sample older than this does not confirm pose
 
 def add_motion_arguments(p):
     p.add_argument('--max-speed', type=float, default=0.1)
@@ -101,6 +102,12 @@ class MotionNode(TimedNode):
 
     def pose(self):
         return self.fusion.pose()
+
+    def verified_pose(self):
+        # last accepted vicon pose if recent else None
+        if self.get_time_sec() - self.fusion.vicon_time > VICON_FRESH:
+            return None
+        return self.fusion.vicon
 
     def send(self, vx=0.0, vy=0.0, wz=0.0):
         self.sender.send(vx, vy, wz)

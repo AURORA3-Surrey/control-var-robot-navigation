@@ -1,7 +1,7 @@
 # motion commands for the motion node, commands follow a minimum-jerk position profile
 # step(node, now) is called once per control tick and returns True when done
 # node is the MotionNode which provides 'args', 'pose()', 'send()', 'correct()',
-# 'speed', 'yaw_rate', 'home' and the 'plan' queue
+# 'verified_pose()', 'speed', 'yaw_rate', 'home' and the 'plan' queue
 
 from nav_utils import clamp, normalize
 import math
@@ -151,7 +151,9 @@ class Turn(Command):
         w_correction = node.correct('turn', error, a.turn_speed, a.angle_tol)
         node.send(wz=w_ff + w_correction)
 
-        if homing and abs(error) <= a.angle_tol and abs(node.yaw_rate) < 0.05:
+        verified = node.verified_pose()  # arrival needs a fresh vicon sample in tolerance
+        if (homing and verified is not None and abs(node.yaw_rate) < 0.05
+                and abs(normalize(self.target_yaw - verified[2])) <= a.angle_tol):
             node.get_logger().info(
                 f"landed {math.degrees(normalize(self.target_yaw - yaw)):+.2f} deg off")
             node.send(0.0, 0.0, 0.0)
@@ -206,7 +208,10 @@ class MoveTo(Command):
 
         node.send(vx=vx_body, vy=vy_body, wz=heading_fix)
 
-        if homing and math.hypot(err_x, err_y) <= a.position_tol and abs(node.speed) < 0.02:
+        verified = node.verified_pose()  # arrival needs a fresh vicon sample in tolerance
+        if (homing and verified is not None and abs(node.speed) < 0.02
+                and math.hypot(self.target_x - verified[0], self.target_y - verified[1])
+                <= a.position_tol):
             node.send(0.0, 0.0, 0.0)
             return True
         if elapsed >= T + a.homing_timeout:
