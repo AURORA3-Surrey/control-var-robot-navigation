@@ -108,20 +108,23 @@ class OdomCheck(Node):
 
     def vicon_cb(self, msg):
         p = msg.pose
-        yaw = normalize(yaw_from_quaternion(p.orientation) + math.radians(self.yaw_offset_deg))
+        q = p.orientation
+        if not abs(math.sqrt(q.x**2 + q.y**2 + q.z**2 + q.w**2) - 1.0) < 0.01:
+            return  # invalid (also nan) quaternion
+        yaw = normalize(yaw_from_quaternion(q) + math.radians(self.yaw_offset_deg))
         self.vicon.append((time.monotonic(), p.position.x, p.position.y, yaw))
 
     def report(self):
         a = self.a
-        print(f'\nodometry: {a.odom_topic} | messages: {len(self.odom)}')
-        print(f'VICON: {a.vicon_topic} | messages: {len(self.vicon)}')
+        print(f'\nOdometry: {a.odom_topic} | messages: {len(self.odom)}')
+        print(f'Vicon: {a.vicon_topic} | messages: {len(self.vicon)}')
         if len(self.odom) < 10 or len(self.vicon) < 10:
             print('not enough messages on both topics\n')
             return False
 
         ot = [s[0] for s in self.odom]
         vt = [s[0] for s in self.vicon]
-        for name, times in (('odometry', ot), ('VICON', vt)):
+        for name, times in (('Odometry', ot), ('Vicon', vt)):
             rate, gap = rate_and_gap(times)
             print(f'{name}: {rate:.1f} Hz | longest gap {gap * 1000:.0f} ms')
 
@@ -172,7 +175,8 @@ class OdomCheck(Node):
             print(f'Vicon origin on the robot: {x[2].real * 1000:+.0f} mm forward, '
                   f'{x[2].imag * 1000:+.0f} mm left of the odometry point')
         n = max(len(pairs) // 10, 1)
-        drift = sum(yaw_gap[:n]) / n - sum(yaw_gap[-n:]) / n
+        gap = [normalize(g - yaw_rotation) for g in yaw_gap]  # no skip at +-180 deg
+        drift = sum(gap[:n]) / n - sum(gap[-n:]) / n
         print(f'Heading drift of the odometry over the run: {math.degrees(drift):+.2f} deg')
 
         warnings = []
@@ -193,7 +197,7 @@ class OdomCheck(Node):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--odom-topic', default='/platform/odom')
+    p.add_argument('--odom-topic', default='/do150_0092/platform/odom')
     p.add_argument('--vicon-topic', default='/vicon/Dingo/Dingo')
     p.add_argument('--duration', type=float, default=30.0)
     add_yaw_offset_arguments(p, '--vicon-yaw-offset-deg')
