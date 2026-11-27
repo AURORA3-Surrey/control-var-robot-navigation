@@ -112,6 +112,53 @@ class VelocityFilter:
         self.prev = (x, y, yaw, stamp)
 
 
+class PoseFusion:
+
+    def __init__(self, tau, max_jump, max_yaw_jump):
+        self.tau = tau
+        self.max_jump = max_jump
+        self.max_yaw_jump = max_yaw_jump
+        self.odom = None         # latest odom (x, y, yaw)
+        self.anchor_odom = None  # odom at last correction
+        self.anchor = None       # fused pose at last correction (vicon frame)
+        self.vicon = None        # last accepted vicon
+        self.vicon_time = None
+
+    def update_odom(self, x, y, yaw):
+        self.odom = (x, y, yaw)
+
+    def update_vicon(self, x, y, yaw, now):
+        # returns False if the sample is not finite or too far from fused
+        if not all(map(math.isfinite, (x, y, yaw))):
+            return False
+        if self.anchor is None:
+            self.anchor_odom = self.odom
+            self.anchor = (x, y, yaw)
+        else:
+            fx, fy, fyaw = self.pose()
+            err_x, err_y, err_yaw = x - fx, y - fy, normalize(yaw - fyaw)
+            if math.hypot(err_x, err_y) > self.max_jump or abs(err_yaw) > self.max_yaw_jump:
+                return False
+            dt = now - self.vicon_time
+            alpha = dt / (self.tau + dt)
+            self.anchor_odom = self.odom
+            self.anchor = (fx + alpha * err_x, fy + alpha * err_y,
+                           normalize(fyaw + alpha * err_yaw))
+        self.vicon = (x, y, yaw)
+        self.vicon_time = now
+        return True
+
+    def pose(self):
+        # odometry motion since last correction
+        ox, oy, oyaw = self.odom
+        ax_odom, ay_odom, ayaw_odom = self.anchor_odom
+        ax, ay, ayaw = self.anchor
+        dx, dy = ox - ax_odom, oy - ay_odom
+        c, s = math.cos(ayaw - ayaw_odom), math.sin(ayaw - ayaw_odom)
+        return (ax + c * dx - s * dy, ay + s * dx + c * dy,
+                normalize(ayaw + normalize(oyaw - ayaw_odom)))
+
+
 def init_ros():
     try:
         from rclpy.signals import SignalHandlerOptions

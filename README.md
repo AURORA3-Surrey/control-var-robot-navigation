@@ -22,10 +22,13 @@ demo/grid.py ──► motion_node.py ──┬─► motion_commands.py   Wait,
                                   │                        PD TrackingCorrection
 vicon_to_odom.py ─────────────────┤
 vicon_yaw_calibration.py ─────────┴─► nav_utils.py        angle maths, yaw-offset file,
-                                                          TwistSender (accel limit), shutdown helpers
+                                                          PoseFusion, TwistSender (accel limit),
+                                                          shutdown helpers
 ```
 
-`motion_node.py` holds `MotionNode` (Vicon pose with the yaw offset and a filtered velocity) and `run_motion()`.
+`motion_node.py` holds `MotionNode` and `run_motion()`. The node follows the odometry (smooth pose and speed) and `PoseFusion` in
+`nav_utils.py` pulls it towards the Vicon pose (with the yaw offset), so a short Vicon gap does not stop the run.
+It aborts if the odometry is stale (0.5 s) or no Vicon sample was accepted for 3 s.
 `demo/grid.py` contains the grid planner (`build_grid_plan`).
 
 To add a new motion, add a `Command` subclass in `motion_commands.py` with a `step(node, now)` method
