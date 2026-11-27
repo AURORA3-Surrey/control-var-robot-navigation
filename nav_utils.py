@@ -124,16 +124,19 @@ def raise_keyboard_interrupt(signum, frame):
     raise KeyboardInterrupt
 
 
+STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)  # SIGHUP: ssh session dropped
+
+
 def stop_on_signals():
     # turn into KeyboardInterrupt so the shutdown code in finally runs
-    signal.signal(signal.SIGINT, raise_keyboard_interrupt)
-    signal.signal(signal.SIGTERM, raise_keyboard_interrupt)
+    for sig in STOP_SIGNALS:
+        signal.signal(sig, raise_keyboard_interrupt)
 
 
 def ignore_stop_signals():
     # used while stopping the robot (second ctrl-c cannot interrupt the stop)
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    for sig in STOP_SIGNALS:
+        signal.signal(sig, signal.SIG_IGN)
 
 
 class TimedNode(Node):

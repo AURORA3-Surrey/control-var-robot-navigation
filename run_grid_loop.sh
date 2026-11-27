@@ -63,7 +63,7 @@ cleanup() {
     echo "loop: stopped after ${run_count} run(s)"
     exit 0
 }
-trap cleanup INT TERM
+trap cleanup INT TERM HUP
 
 while true; do
     run_count=$((run_count + 1))
