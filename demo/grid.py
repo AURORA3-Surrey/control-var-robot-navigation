@@ -1,10 +1,10 @@
 # grid demo: goes to grid of points starting at the current pose, one move_to per point
-# (the motion is in grid_motion.py and grid_commands.py)
+# (the motion is in motion_node.py and motion_commands.py)
 # requires yaw calibration (vicon_yaw_calibration.py) unless bypassed
 
 import argparse
-from grid_commands import MoveTo, Turn, Wait
-from grid_motion import add_motion_arguments, run_motion
+from motion_commands import MoveTo, Turn, Wait
+from motion_node import add_motion_arguments, run_motion
 
 
 def add_grid_arguments(p):

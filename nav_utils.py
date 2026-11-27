@@ -144,14 +144,6 @@ class TimedNode(Node):
         return self.get_clock().now().nanoseconds / 1e9
 
 
-def call_service(node, client, request, wait_timeout, call_timeout):
-    if not client.wait_for_service(timeout_sec=wait_timeout):
-        return None
-    future = client.call_async(request)
-    rclpy.spin_until_future_complete(node, future, timeout_sec=call_timeout)
-    return bool(future.done() and future.result() is not None and future.result().success)
-
-
 class TwistSender:
     # publishes TwistStamped and limits how fast velocity can change
 

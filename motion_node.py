@@ -1,4 +1,4 @@
-# runs a plan of motion commands (grid_commands.py) using the vicon pose
+# runs a plan of motion commands (motion_commands.py) using the vicon pose
 # initialize(), then start_control_loop(plan), control_tick() runs one command at a time
 
 import math
@@ -10,7 +10,7 @@ from nav_utils import (TimedNode, TwistSender, VelocityFilter, add_yaw_offset_ar
                        ignore_stop_signals, init_ros, normalize, require_fresh_yaw_offset,
                        resolve_yaw_offset, send_zero_burst, stop_on_signals,
                        yaw_from_quaternion)
-from grid_commands import TrackingCorrection
+from motion_commands import TrackingCorrection
 
 
 def add_motion_arguments(p):
