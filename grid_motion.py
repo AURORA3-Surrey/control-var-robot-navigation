@@ -6,9 +6,8 @@ from collections import deque
 import rclpy
 from geometry_msgs.msg import TwistStamped
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from std_srvs.srv import SetBool
-from nav_utils import (TimedNode, TwistSender, call_service, ignore_stop_signals, init_ros,
-                       normalize, send_zero_burst, stop_on_signals)
+from nav_utils import (TimedNode, TwistSender, ignore_stop_signals, init_ros, normalize,
+                       send_zero_burst, stop_on_signals)
 from grid_commands import MoveTo, TrackingCorrection, Turn, Wait
 
 
@@ -32,8 +31,7 @@ def add_grid_arguments(p, *, position_tol, angle_tol, homing_timeout):
     p.add_argument('--max-accel', type=float, default=0.3)
     p.add_argument('--max-ang-accel', type=float, default=0.5)
     p.add_argument('--no-return-home', action='store_true')
-    p.add_argument('--cmd-vel-topic', default='/cmd_vel')
-    p.add_argument('--motor-power-service', default='/motor_power')
+    p.add_argument('--cmd-vel-topic', default='/do150_0092/cmd_vel')
     p.add_argument('--corr-max-d-error', type=float, default=1.0)
 
 
@@ -112,7 +110,6 @@ class GridMotionNode(TimedNode):
             reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST, depth=10)
         self.pub = self.create_publisher(TwistStamped, args.cmd_vel_topic, qos)
         self.create_subscription(self.pose_msg_type, pose_topic, self.on_pose, qos)
-        self.motor_client = self.create_client(SetBool, args.motor_power_service)
         self.timer_period = 1.0 / self.args.rate
         self.control_timer = None
         self.sender = TwistSender(
@@ -138,19 +135,13 @@ class GridMotionNode(TimedNode):
         return self.correction.compute(axis, error, max_speed, tol, self.pose_seq, self.pose_stamp)
 
     def initialize(self):
-        # wait for pose, enable motors, save starting pose
+        # wait for pose, save starting pose
         self.get_logger().info(self.waiting_message())
         deadline = self.get_time_sec() + 10.0
         while rclpy.ok() and not self.have_pose and self.get_time_sec() < deadline:
             rclpy.spin_once(self, timeout_sec=0.1)
         if not self.have_pose:
             raise RuntimeError(self.no_pose_message())
-
-        enabled = call_service(self, self.motor_client, SetBool.Request(data=True), 3.0, 5.0)
-        if enabled is None:
-            self.get_logger().warning('motor power service not found')
-        elif not enabled:
-            self.get_logger().warning('motor power enable failed or timed out')
 
         self.home = self.pose()
         self.get_logger().info(f'home: x={self.home[0]:.3f} y={self.home[1]:.3f} '

@@ -28,7 +28,7 @@ class Stop(Node):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--cmd-vel-topic', default='/cmd_vel')
+    p.add_argument('--cmd-vel-topic', default='/do150_0092/cmd_vel')
     p.add_argument('--motor-power-service', default='/motor_power')
     p.add_argument('--bursts', type=int, default=20)
     p.add_argument('--keep-motors-on', action='store_true')

@@ -54,8 +54,8 @@ cleanup() {
     fi
     # force the robot to zero velocity from the shell
     if [ "${FINAL_STOP_PUB:-1}" = "1" ] && command -v ros2 >/dev/null 2>&1; then
-        echo "loop: publishing 4x zero /cmd_vel from the shell as final stop..."
-        timeout 10 ros2 topic pub --times 4 --rate 2 /cmd_vel \
+        echo "loop: publishing 4x zero /do150_0092/cmd_vel from the shell as final stop..."
+        timeout 10 ros2 topic pub --times 4 --rate 2 /do150_0092/cmd_vel \
             geometry_msgs/msg/TwistStamped \
             '{header: auto, twist: {linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}}' \
             >/dev/null 2>&1 || true
