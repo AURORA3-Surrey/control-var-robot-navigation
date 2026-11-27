@@ -25,6 +25,7 @@ def add_motion_arguments(p):
     p.add_argument('--position-tol', type=float, default=0.005)
     p.add_argument('--angle-tol', type=float, default=0.0087)
     p.add_argument('--homing-timeout', type=float, default=3.0)
+    p.add_argument('--max-tracking-error', type=float, default=0.3)
     p.add_argument('--rate', type=float, default=25.0)
     p.add_argument('--max-accel', type=float, default=0.3)
     p.add_argument('--max-ang-accel', type=float, default=0.5)

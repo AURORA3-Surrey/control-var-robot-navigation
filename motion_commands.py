@@ -1,7 +1,7 @@
 # motion commands for the motion node, commands follow a minimum-jerk position profile
 # step(node, now) is called once per control tick and returns True when done
 # node is the MotionNode which provides 'args', 'pose()', 'send()', 'correct()',
-# 'verified_pose()', 'speed', 'yaw_rate', 'home' and the 'plan' queue
+# 'verified_pose()', 'abort()', 'speed', 'yaw_rate', 'home' and the 'plan' queue
 
 from nav_utils import clamp, normalize
 import math
@@ -186,7 +186,7 @@ class MoveTo(Command):
                 f"({self.target_x:+.3f}, {self.target_y:+.3f})")
         dx = self.target_x - start_x
         dy = self.target_y - start_y
-        T = max(duration_for_peak(dx, a.max_speed), duration_for_peak(dy, a.max_speed))
+        T = duration_for_peak(math.hypot(dx, dy), a.max_speed)
         if T <= 0:
             return True
 
@@ -197,6 +197,10 @@ class MoveTo(Command):
 
         expected_x, expected_y = start_x + dx * pf, start_y + dy * pf
         err_x, err_y = expected_x - x, expected_y - y
+
+        if math.hypot(err_x, err_y) > a.max_tracking_error:
+            node.abort('move_to is too far behind its path')
+            return True
 
         vx_corr = node.correct('move_x', err_x, a.max_speed, a.position_tol)
         vy_corr = node.correct('move_y', err_y, a.max_speed, a.position_tol)
