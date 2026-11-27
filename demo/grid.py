@@ -3,6 +3,7 @@
 # requires yaw calibration (vicon_yaw_calibration.py) unless bypassed
 
 import argparse
+import sys
 from motion_commands import MoveTo, Turn, Wait
 from motion_node import add_motion_arguments, run_motion
 
@@ -58,7 +59,7 @@ def parse_args():
 
 
 def main():
-    run_motion(parse_args(), build_grid_plan)
+    sys.exit(run_motion(parse_args(), build_grid_plan))
 
 
 if __name__ == '__main__':

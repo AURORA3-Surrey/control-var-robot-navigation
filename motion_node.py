@@ -53,6 +53,7 @@ class MotionNode(TimedNode):
         self.pose_stamp = None
         self.speed = 0.0         # [m/s]
         self.yaw_rate = 0.0      # [rad/s]
+        self.aborted = False
         self.is_finished = False
 
         qos = QoSProfile(
@@ -89,6 +90,11 @@ class MotionNode(TimedNode):
     def send(self, vx=0.0, vy=0.0, wz=0.0):
         self.sender.send(vx, vy, wz)
 
+    def abort(self, reason):
+        self.get_logger().error(f'{reason}, aborting')
+        self.aborted = True
+        self.is_finished = True
+
     def correct(self, axis, error, max_speed, tol):
         return self.correction.compute(axis, error, max_speed, tol, self.pose_seq, self.pose_stamp)
 
@@ -118,10 +124,7 @@ class MotionNode(TimedNode):
         now = self.get_time_sec()
 
         if self.last_pose_time is not None and now - self.last_pose_time > self.args.vicon_timeout:
-            self.get_logger().error(
-                f'vicon pose stale for {now - self.last_pose_time:.1f}s, aborting')
-            self.send(0.0, 0.0, 0.0)
-            self.is_finished = True
+            self.abort(f'vicon pose stale for {now - self.last_pose_time:.1f}s')
             return
 
         # if no current command get next from plan
@@ -149,6 +152,7 @@ class MotionNode(TimedNode):
 
 def run_motion(args, build_plan):
     # check the yaw offset, create the node, run build_plan(args, home), finish with a zero burst
+    # returns exit status, 0 only if the plan finished
     require_fresh_yaw_offset(args, args.vicon_yaw_offset_deg)
     init_ros()
     node = MotionNode(args)
@@ -162,13 +166,16 @@ def run_motion(args, build_plan):
 
     except KeyboardInterrupt:
         node.get_logger().warning('stop requested')
+        node.aborted = True
     except Exception as exc:
         node.get_logger().error(f'{exc}')
         raise
     finally:
+        node.is_finished = True
         ignore_stop_signals()
         node.sender.reset()
         send_zero_burst(node, 10, 0.02)
         if rclpy.ok():
             node.destroy_node()
             rclpy.shutdown()
+    return 1 if node.aborted else 0

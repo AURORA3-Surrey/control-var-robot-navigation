@@ -28,7 +28,7 @@ run_count=0
 
 # ctrl-c kill handling
 cleanup() {
-    trap '' INT TERM
+    trap '' INT TERM HUP
     pid="${NODE_PID}"
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
         echo
