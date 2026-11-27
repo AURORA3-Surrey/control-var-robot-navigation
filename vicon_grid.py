@@ -1,61 +1,64 @@
-# grid motion using VICON tracking data
-# (control logic is in grid_motion.py)
+# grid demo: goes to grid of points starting at the current pose, one move_to per point
+# (the motion is in grid_motion.py and grid_commands.py)
 # requires yaw calibration (vicon_yaw_calibration.py) unless bypassed
 
 import argparse
-import math
-from geometry_msgs.msg import PoseStamped
-from grid_motion import GridMotionNode, add_grid_arguments, run_grid
-from nav_utils import (VelocityFilter, add_yaw_offset_arguments, normalize,
-                       require_fresh_yaw_offset, resolve_yaw_offset, yaw_from_quaternion)
+from grid_commands import MoveTo, Turn, Wait
+from grid_motion import add_motion_arguments, run_motion
 
 
-class ViconGridNode(GridMotionNode):
-    label = 'vicon'
-    stale_label = 'vicon pose'
-    stop_message = 'stop requested'
-    pose_msg_type = PoseStamped
+def add_grid_arguments(p):
+    # rows (height points) width set by --grid-cols
+    p.add_argument('--grid-size', type=int, default=4)
+    # columns (width points) default = --grid-size (square)
+    p.add_argument('--grid-cols', type=int, default=None)
+    p.add_argument('--cell-size', type=float, default=0.25)
+    p.add_argument('--cell-size-x', type=float, default=None)
+    p.add_argument('--cell-size-y', type=float, default=None)
+    p.add_argument('--no-return-home', action='store_true')
 
-    def __init__(self, args):
-        super().__init__(args, 'grid_motion_vicon_node', args.vicon_topic, args.vicon_timeout)
 
-    def setup_pose_source(self):
-        self.yaw_offset_deg = resolve_yaw_offset(self, self.args, self.args.vicon_yaw_offset_deg)
-        self.velocity = VelocityFilter(self.args.vel_filter_tau)
+def grid_dimensions(args):
+    # (rows, cols, cell size along x, cell size along y)
+    rows = args.grid_size
+    cols = args.grid_cols if args.grid_cols is not None else args.grid_size
+    csx = args.cell_size_x if args.cell_size_x is not None else args.cell_size
+    csy = args.cell_size_y if args.cell_size_y is not None else args.cell_size
+    return rows, cols, csx, csy
 
-    def on_pose(self, msg):
-        x = msg.pose.position.x
-        y = msg.pose.position.y
-        yaw = normalize(
-            yaw_from_quaternion(msg.pose.orientation) + math.radians(self.yaw_offset_deg))
-        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        # velocity from filtered finite differences of vicon samples
-        self.velocity.update(x, y, yaw, stamp)
-        self.speed = self.velocity.v
-        self.yaw_rate = self.velocity.wz
-        self.store_pose(x, y, yaw, stamp)
 
-    def waiting_message(self):
-        return f'waiting for {self.args.vicon_topic}'
+def build_grid_plan(args, home):
+    # path over the grid starting at home = (x, y, yaw) then back
+    rows, cols, csx, csy = grid_dimensions(args)
+    hx, hy, hyaw = home
+    plan = [Wait(0.3)]
 
-    def no_pose_message(self):
-        return f'no vicon pose on {self.args.vicon_topic} within 10s'
+    waypoints = []
+    for row in range(rows):
+        wy = hy + row * csy
+        col_order = range(cols) if row % 2 == 0 else reversed(range(cols))
+        for col in col_order:
+            waypoints.append((hx + col * csx, wy))
+    for wx, wy in waypoints[1:]:
+        plan.append(MoveTo(wx, wy))
+
+    if not args.no_return_home:
+        plan.append(MoveTo(hx, hy))
+        plan.append(Turn(hyaw))
+
+    plan.append(Wait(0.8))
+    return plan
 
 
 def parse_args():
     p = argparse.ArgumentParser()
-    add_grid_arguments(p, position_tol=0.005, angle_tol=0.0087, homing_timeout=3.0)
-    p.add_argument('--vicon-topic', default='/vicon/Dingo/Dingo')
-    p.add_argument('--vicon-timeout', type=float, default=0.5)
-    p.add_argument('--vel-filter-tau', type=float, default=0.08)
-    add_yaw_offset_arguments(p, '--vicon-yaw-offset-deg')
+    add_grid_arguments(p)
+    add_motion_arguments(p)
     return p.parse_args()
 
 
 def main():
-    args = parse_args()
-    require_fresh_yaw_offset(args, args.vicon_yaw_offset_deg)
-    run_grid(args, ViconGridNode)
+    run_motion(parse_args(), build_grid_plan)
 
 
 if __name__ == '__main__':

@@ -25,12 +25,11 @@ vicon_yaw_calibration.py ─────────┴─► nav_utils.py      
                                                          TwistSender (accel limit), shutdown helpers
 ```
 
-`vicon_grid.py` sets where the pose comes from and the default args. It uses the Vicon pose with the yaw offset
-and a filtered velocity.<br>
-The planner (`build_grid_plan`), `GridMotionNode` and `run_grid()` are contained in `grid_motion.py`.
+`grid_motion.py` holds `MotionNode` (Vicon pose with the yaw offset and a filtered velocity) and `run_motion()`.
+`vicon_grid.py` contains the grid planner (`build_grid_plan`).
 
 To add a new motion, add a `Command` subclass in `grid_commands.py` with a `step(node, now)` method
-and queue it in `build_grid_plan()` in `grid_motion.py`.
+and queue it in the plan builder (`build_grid_plan()` in `vicon_grid.py`).
 
 ## Robot-side code
 

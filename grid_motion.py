@@ -1,96 +1,45 @@
-# grid runner for vicon_grid, omni platform
-# initialize(), then start_control_loop() plans grid, control_tick() runs one command at a time
+# runs a plan of motion commands (grid_commands.py) using the vicon pose
+# initialize(), then start_control_loop(plan), control_tick() runs one command at a time
 
 import math
 from collections import deque
 import rclpy
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from nav_utils import (TimedNode, TwistSender, ignore_stop_signals, init_ros, normalize,
-                       send_zero_burst, stop_on_signals)
-from grid_commands import MoveTo, TrackingCorrection, Turn, Wait
+from nav_utils import (TimedNode, TwistSender, VelocityFilter, add_yaw_offset_arguments,
+                       ignore_stop_signals, init_ros, normalize, require_fresh_yaw_offset,
+                       resolve_yaw_offset, send_zero_burst, stop_on_signals,
+                       yaw_from_quaternion)
+from grid_commands import TrackingCorrection
 
 
-def add_grid_arguments(p, *, position_tol, angle_tol, homing_timeout):
-    # rows (height points) width set by --grid-cols
-    p.add_argument('--grid-size', type=int, default=4)
-    # columns (width points) default = --grid-size (square)
-    p.add_argument('--grid-cols', type=int, default=None)
-    p.add_argument('--cell-size', type=float, default=0.25)
-    p.add_argument('--cell-size-x', type=float, default=None)
-    p.add_argument('--cell-size-y', type=float, default=None)
+def add_motion_arguments(p):
     p.add_argument('--max-speed', type=float, default=0.1)
     p.add_argument('--turn-speed', type=float, default=0.25)
     p.add_argument('--corr-gain', type=float, default=1.5)
     p.add_argument('--corr-damping-gain', type=float, default=0.3)
     p.add_argument('--corr-filter-tau', type=float, default=0.08)
-    p.add_argument('--position-tol', type=float, default=position_tol)
-    p.add_argument('--angle-tol', type=float, default=angle_tol)
+    p.add_argument('--corr-max-d-error', type=float, default=1.0)
+    p.add_argument('--position-tol', type=float, default=0.005)
+    p.add_argument('--angle-tol', type=float, default=0.0087)
+    p.add_argument('--homing-timeout', type=float, default=3.0)
     p.add_argument('--rate', type=float, default=25.0)
-    p.add_argument('--homing-timeout', type=float, default=homing_timeout)
     p.add_argument('--max-accel', type=float, default=0.3)
     p.add_argument('--max-ang-accel', type=float, default=0.5)
-    p.add_argument('--no-return-home', action='store_true')
     p.add_argument('--cmd-vel-topic', default='/do150_0092/cmd_vel')
-    p.add_argument('--corr-max-d-error', type=float, default=1.0)
+    p.add_argument('--vicon-topic', default='/vicon/Dingo/Dingo')
+    p.add_argument('--vicon-timeout', type=float, default=0.5)
+    p.add_argument('--vel-filter-tau', type=float, default=0.08)
+    add_yaw_offset_arguments(p, '--vicon-yaw-offset-deg')
 
 
-def grid_dimensions(args):
-    # (rows, cols, cell size along x, cell size along y)
-    rows = args.grid_size
-    cols = args.grid_cols if args.grid_cols is not None else args.grid_size
-    csx = args.cell_size_x if args.cell_size_x is not None else args.cell_size
-    csy = args.cell_size_y if args.cell_size_y is not None else args.cell_size
-    return rows, cols, csx, csy
+class MotionNode(TimedNode):
 
-
-def build_grid_plan(args, home):
-    # path over the grid starting at home = (x, y, yaw) then back
-    rows, cols, csx, csy = grid_dimensions(args)
-    hx, hy, hyaw = home
-    plan = [Wait(0.3)]
-
-    waypoints = []
-    for row in range(rows):
-        wy = hy + row * csy
-        col_order = range(cols) if row % 2 == 0 else reversed(range(cols))
-        for col in col_order:
-            waypoints.append((hx + col * csx, wy))
-    for wx, wy in waypoints[1:]:
-        plan.append(MoveTo(wx, wy))
-
-    if not args.no_return_home:
-        plan.append(MoveTo(hx, hy))
-        plan.append(Turn(hyaw))
-
-    plan.append(Wait(0.8))
-    return plan
-
-
-class GridMotionNode(TimedNode):
-    label = ''               # 'vicon' / 'odom'
-    stale_label = ''         # abort message
-    stop_message = ''        # warning logged when ctrlc
-    pose_msg_type = None
-
-    def setup_pose_source(self):
-        """called before any publisher/subscriber is created"""
-
-    def on_pose(self, msg):
-        """set self.speed then call store_pose()"""
-        raise NotImplementedError
-
-    def waiting_message(self):
-        raise NotImplementedError
-
-    def no_pose_message(self):
-        raise NotImplementedError
-
-    def __init__(self, args, node_name, pose_topic, pose_timeout):
-        super().__init__(node_name)
+    def __init__(self, args):
+        super().__init__('motion_node')
         self.args = args
-        self.pose_timeout = pose_timeout
-        self.setup_pose_source()
+        self.yaw_offset_deg = resolve_yaw_offset(self, args, args.vicon_yaw_offset_deg)
+        self.velocity = VelocityFilter(args.vel_filter_tau)
         self.x = self.y = self.yaw = 0.0
         self.have_pose = False
         self.home = None
@@ -98,7 +47,7 @@ class GridMotionNode(TimedNode):
         self.plan = deque()      # queue of command objects
         self.current_cmd = None  # command being executed
 
-        # filled by store_pose()
+        # filled by on_vicon()
         self.pose_seq = 0
         self.last_pose_time = None
         self.pose_stamp = None
@@ -109,14 +58,23 @@ class GridMotionNode(TimedNode):
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST, depth=10)
         self.pub = self.create_publisher(TwistStamped, args.cmd_vel_topic, qos)
-        self.create_subscription(self.pose_msg_type, pose_topic, self.on_pose, qos)
+        self.create_subscription(PoseStamped, args.vicon_topic, self.on_vicon, qos)
         self.timer_period = 1.0 / self.args.rate
         self.control_timer = None
         self.sender = TwistSender(
             self, self.pub, args.max_accel, args.max_ang_accel, self.timer_period)
         self.correction = TrackingCorrection(self.get_time_sec, args)
 
-    def store_pose(self, x, y, yaw, stamp):
+    def on_vicon(self, msg):
+        x = msg.pose.position.x
+        y = msg.pose.position.y
+        yaw = normalize(
+            yaw_from_quaternion(msg.pose.orientation) + math.radians(self.yaw_offset_deg))
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        # velocity from filtered finite differences of vicon samples
+        self.velocity.update(x, y, yaw, stamp)
+        self.speed = self.velocity.v
+        self.yaw_rate = self.velocity.wz
         self.x = x
         self.y = y
         self.yaw = yaw
@@ -136,22 +94,21 @@ class GridMotionNode(TimedNode):
 
     def initialize(self):
         # wait for pose, save starting pose
-        self.get_logger().info(self.waiting_message())
+        self.get_logger().info(f'waiting for {self.args.vicon_topic}')
         deadline = self.get_time_sec() + 10.0
         while rclpy.ok() and not self.have_pose and self.get_time_sec() < deadline:
             rclpy.spin_once(self, timeout_sec=0.1)
         if not self.have_pose:
-            raise RuntimeError(self.no_pose_message())
+            raise RuntimeError(f'no vicon pose on {self.args.vicon_topic} within 10s')
 
         self.home = self.pose()
         self.get_logger().info(f'home: x={self.home[0]:.3f} y={self.home[1]:.3f} '
                                f'yaw={math.degrees(self.home[2]):+.2f} deg')
 
-    def start_control_loop(self):
-        rows, cols, _, _ = grid_dimensions(self.args)
-        self.get_logger().info(f'Generating {rows} rows x {cols} cols grid plan...')
+    def start_control_loop(self, plan):
+        self.get_logger().info(f'{len(plan)} commands planned')
         self.plan.clear()
-        self.plan.extend(build_grid_plan(self.args, self.home))
+        self.plan.extend(plan)
         self.control_timer = self.create_timer(self.timer_period, self.control_tick)
 
     def control_tick(self):
@@ -160,9 +117,9 @@ class GridMotionNode(TimedNode):
 
         now = self.get_time_sec()
 
-        if self.last_pose_time is not None and now - self.last_pose_time > self.pose_timeout:
+        if self.last_pose_time is not None and now - self.last_pose_time > self.args.vicon_timeout:
             self.get_logger().error(
-                f'{self.stale_label} stale for {now - self.last_pose_time:.1f}s, aborting')
+                f'vicon pose stale for {now - self.last_pose_time:.1f}s, aborting')
             self.send(0.0, 0.0, 0.0)
             self.is_finished = True
             return
@@ -190,20 +147,21 @@ class GridMotionNode(TimedNode):
             self.current_cmd = None
 
 
-def run_grid(args, node_class):
-    # create the node, run path, finish with zero-velocity burst
+def run_motion(args, build_plan):
+    # check the yaw offset, create the node, run build_plan(args, home), finish with a zero burst
+    require_fresh_yaw_offset(args, args.vicon_yaw_offset_deg)
     init_ros()
-    node = node_class(args)
+    node = MotionNode(args)
     stop_on_signals()
 
     try:
         node.initialize()
-        node.start_control_loop()
+        node.start_control_loop(build_plan(args, node.home))
         while rclpy.ok() and not node.is_finished:
             rclpy.spin_once(node, timeout_sec=0.1)
 
     except KeyboardInterrupt:
-        node.get_logger().warning(node.stop_message)
+        node.get_logger().warning('stop requested')
     except Exception as exc:
         node.get_logger().error(f'{exc}')
         raise

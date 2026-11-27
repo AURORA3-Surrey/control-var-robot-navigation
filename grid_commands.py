@@ -1,7 +1,7 @@
-# motion commands for grid runners, commands follows a minimum-jerk position profile
+# motion commands for the motion node, commands follow a minimum-jerk position profile
 # step(node, now) is called once per control tick and returns True when done
-# node is the GridMotionNode which provides 'args', 'pose()', 'send()', 'tracking_correction()',
-# 'label' if 'vicon' or 'odom', 'speed', 'yaw_rate', 'home' and the 'plan' queue
+# node is the MotionNode which provides 'args', 'pose()', 'send()', 'correct()',
+# 'speed', 'yaw_rate', 'home' and the 'plan' queue
 
 from nav_utils import clamp, normalize
 import math
@@ -134,7 +134,7 @@ class Turn(Command):
             node.get_logger().info(
                 f"turn cmd {math.degrees(angle):+.1f} deg "
                 f"(start yaw {math.degrees(start_yaw):+.1f}) "
-                f"-> target {node.label} yaw {math.degrees(normalize(self.target_yaw)):+.1f} deg")
+                f"-> target yaw {math.degrees(normalize(self.target_yaw)):+.1f} deg")
 
         T = duration_for_peak(angle, a.turn_speed)
         if T <= 0:
@@ -180,7 +180,7 @@ class MoveTo(Command):
         if not self.logged:
             self.logged = True
             node.get_logger().info(
-                f"move_to {node.label} ({start_x:+.3f}, {start_y:+.3f}) -> "
+                f"move_to ({start_x:+.3f}, {start_y:+.3f}) -> "
                 f"({self.target_x:+.3f}, {self.target_y:+.3f})")
         dx = self.target_x - start_x
         dy = self.target_y - start_y
