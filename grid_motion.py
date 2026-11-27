@@ -1,4 +1,4 @@
-# grid runner shared by vicon_grid and odom_grid (wheel odom)
+# grid runner for vicon_grid, omni platform
 # initialize(), then start_control_loop() plans grid, control_tick() runs one command at a time
 
 import math
@@ -9,11 +9,10 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from std_srvs.srv import SetBool
 from nav_utils import (TimedNode, TwistSender, call_service, ignore_stop_signals, init_ros,
                        normalize, send_zero_burst, stop_on_signals)
-from grid_commands import Drive, MoveTo, ReturnHomeDiff, TrackingCorrection, Turn, Wait
+from grid_commands import MoveTo, TrackingCorrection, Turn, Wait
 
 
-def add_grid_arguments(p, *, position_tol, return_position_tol, angle_tol, homing_timeout):
-    p.add_argument('--platform', choices=['diff', 'omni'], default='diff')
+def add_grid_arguments(p, *, position_tol, angle_tol, homing_timeout):
     # rows (height points) width set by --grid-cols
     p.add_argument('--grid-size', type=int, default=4)
     # columns (width points) default = --grid-size (square)
@@ -27,11 +26,9 @@ def add_grid_arguments(p, *, position_tol, return_position_tol, angle_tol, homin
     p.add_argument('--corr-damping-gain', type=float, default=0.3)
     p.add_argument('--corr-filter-tau', type=float, default=0.08)
     p.add_argument('--position-tol', type=float, default=position_tol)
-    p.add_argument('--return-position-tol', type=float, default=return_position_tol)
     p.add_argument('--angle-tol', type=float, default=angle_tol)
     p.add_argument('--rate', type=float, default=25.0)
     p.add_argument('--homing-timeout', type=float, default=homing_timeout)
-    p.add_argument('--return-home-max-retries', type=int, default=8)
     p.add_argument('--max-accel', type=float, default=0.3)
     p.add_argument('--max-ang-accel', type=float, default=0.5)
     p.add_argument('--no-return-home', action='store_true')
@@ -53,38 +50,20 @@ def build_grid_plan(args, home):
     # path over the grid starting at home = (x, y, yaw) then back
     rows, cols, csx, csy = grid_dimensions(args)
     hx, hy, hyaw = home
-    omni = args.platform == 'omni'
     plan = [Wait(0.3)]
 
-    if omni:
-        waypoints = []
-        for row in range(rows):
-            wy = hy + row * csy
-            col_order = range(cols) if row % 2 == 0 else reversed(range(cols))
-            for col in col_order:
-                waypoints.append((hx + col * csx, wy))
-        for wx, wy in waypoints[1:]:
-            plan.append(MoveTo(wx, wy))
-    else:
-        intended_yaw = hyaw  # accumulates ideal angle so turn errors don't add up
-        for row in range(rows):
-            for _ in range(cols - 1):
-                plan.append(Drive(csx))
-            if row < rows - 1:  # turn, step sideways, turn
-                turn = -math.pi / 2 if row % 2 == 0 else math.pi / 2
-                spin = 1.0 if turn >= 0 else -1.0
-                intended_yaw = normalize(intended_yaw + turn)
-                plan.append(Turn(intended_yaw, spin))
-                plan.append(Drive(csy))
-                intended_yaw = normalize(intended_yaw + turn)
-                plan.append(Turn(intended_yaw, spin))
+    waypoints = []
+    for row in range(rows):
+        wy = hy + row * csy
+        col_order = range(cols) if row % 2 == 0 else reversed(range(cols))
+        for col in col_order:
+            waypoints.append((hx + col * csx, wy))
+    for wx, wy in waypoints[1:]:
+        plan.append(MoveTo(wx, wy))
 
     if not args.no_return_home:
-        if omni:
-            plan.append(MoveTo(hx, hy))
-            plan.append(Turn(hyaw))
-        else:
-            plan.append(ReturnHomeDiff())
+        plan.append(MoveTo(hx, hy))
+        plan.append(Turn(hyaw))
 
     plan.append(Wait(0.8))
     return plan
@@ -108,9 +87,6 @@ class GridMotionNode(TimedNode):
 
     def no_pose_message(self):
         raise NotImplementedError
-
-    def zero_odometry(self):
-        """for pose that needs to be reset before run (odom)"""
 
     def __init__(self, args, node_name, pose_topic, pose_timeout):
         super().__init__(node_name)
@@ -176,16 +152,13 @@ class GridMotionNode(TimedNode):
         elif not enabled:
             self.get_logger().warning('motor power enable failed or timed out')
 
-        self.zero_odometry()
-
         self.home = self.pose()
         self.get_logger().info(f'home: x={self.home[0]:.3f} y={self.home[1]:.3f} '
                                f'yaw={math.degrees(self.home[2]):+.2f} deg')
 
     def start_control_loop(self):
         rows, cols, _, _ = grid_dimensions(self.args)
-        self.get_logger().info(
-            f'Generating {rows} rows x {cols} cols grid plan ({self.args.platform})...')
+        self.get_logger().info(f'Generating {rows} rows x {cols} cols grid plan...')
         self.plan.clear()
         self.plan.extend(build_grid_plan(self.args, self.home))
         self.control_timer = self.create_timer(self.timer_period, self.control_tick)

@@ -44,8 +44,7 @@ class ViconGridNode(GridMotionNode):
 
 def parse_args():
     p = argparse.ArgumentParser()
-    add_grid_arguments(
-        p, position_tol=0.005, return_position_tol=0.01, angle_tol=0.0087, homing_timeout=3.0)
+    add_grid_arguments(p, position_tol=0.005, angle_tol=0.0087, homing_timeout=3.0)
     p.add_argument('--vicon-topic', default='/vicon/Dingo/Dingo')
     p.add_argument('--vicon-timeout', type=float, default=0.5)
     p.add_argument('--vel-filter-tau', type=float, default=0.08)
