@@ -12,7 +12,7 @@ from nav_utils import (DEFAULT_YAW_OFFSET_FILE, TimedNode, TwistSender, clamp, i
 
 RATE = 25.0
 VICON_TIMEOUT = 0.5  # s without a valid vicon pose before stopping
-LEG_TIMEOUT = 10.0
+LEG_MARGIN = 5.0  # s added to the driving time of each leg
 
 
 class Abort(RuntimeError):
@@ -52,16 +52,16 @@ class YawCalibNode(TimedNode):
         return self.pose
 
 
-def drive(node, vx, yaw0, done):
+def drive(node, vx, yaw0, timeout, done):
     # straight line holding yaw0 until done(x, y)
     t0 = time.time()
-    while time.time() - t0 < LEG_TIMEOUT:
+    while time.time() - t0 < timeout:
         x, y, yaw = node.tick()
         if done(x, y):
             node.send()
             return x, y, yaw
         node.send(vx, clamp(1.5 * normalize(yaw0 - yaw), -0.3, 0.3))
-    raise Abort(f'leg not finished in {LEG_TIMEOUT:.0f} s')
+    raise Abort(f'leg not finished in {timeout:.0f} s')
 
 
 def parse_args():
@@ -94,7 +94,8 @@ def main():
             raise Abort('robot not still')
         log.info(f'start ({x0:+.3f}, {y0:+.3f}) vicon yaw {math.degrees(yaw0):+.1f} deg')
 
-        x1, y1, yaw1 = drive(node, args.speed, yaw0,
+        timeout = args.distance / args.speed + LEG_MARGIN
+        x1, y1, yaw1 = drive(node, args.speed, yaw0, timeout,
                              lambda x, y: math.hypot(x - x0, y - y0) >= args.distance)
         bearing = math.atan2(y1 - y0, x1 - x0)
         off = math.degrees(normalize(bearing - (yaw0 + 0.5 * normalize(yaw1 - yaw0))))
@@ -104,7 +105,7 @@ def main():
         log.info(f'moved {math.hypot(x1 - x0, y1 - y0):.3f} m at bearing '
                  f'{math.degrees(bearing):+.1f} deg: offset {off:+.1f} deg, snapped {snap:+.0f}')
 
-        xe, ye, _ = drive(node, -args.speed, yaw0, lambda x, y: (
+        xe, ye, _ = drive(node, -args.speed, yaw0, timeout, lambda x, y: (
             (x - x0) * math.cos(bearing) + (y - y0) * math.sin(bearing) <= 0.0))
         log.info(f'back at start within {math.hypot(xe - x0, ye - y0) * 1000:.0f} mm')
 
