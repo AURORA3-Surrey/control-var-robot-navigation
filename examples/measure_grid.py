@@ -11,7 +11,7 @@ def record(point):
 
 
 robot = Robot(ADDRESS)
-points = [(x, y, 0) for x in (-2.0, 0.0, 2.0) for y in (-1.0, 1.0)]  # x, y, yaw_deg
+points = [(x, y, 0) for x in (-1.0, 1.0) for y in (-2.0, 0.0, 2.0)]  # x, y, yaw_deg
 problems = robot.check(points)
 if problems:
     raise SystemExit('not accepted: ' + '; '.join(problems))
