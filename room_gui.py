@@ -19,7 +19,7 @@ from nav_utils import (add_yaw_offset_arguments, init_ros, normalize, resolve_ya
                        yaw_from_quaternion)
 from session import check_points
 
-SCALE = 85   # [px/m]
+SCALE = 170   # [px/m]
 MARGIN = 40  # [px]
 
 
@@ -135,11 +135,12 @@ class RoomGui(QWidget):
     def refresh(self):
         if self.proc and self.proc.poll() is not None:
             self.log.seek(0)
-            last = (self.log.read().splitlines() or [''])[-1]
+            lines = self.log.read().splitlines() or ['']
+            why = next((line for line in reversed(lines) if 'ERROR' in line), lines[-1])
             if self.proc.returncode == 0:
                 self.say('arrived', 'green')
             else:
-                self.say(f'not arrived: {last[:90]}', 'red')
+                self.say(f'not arrived: {why.split("]: ")[-1][:90]}', 'red')
             self.proc = self.target = None
         text = ''
         if self.pose:

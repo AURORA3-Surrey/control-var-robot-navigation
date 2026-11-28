@@ -143,7 +143,7 @@ def main():
         status = run_motion(args, build_session_plan)
     finally:
         args.results.close(args.points, 'not run')
-    sys.exit(status)
+    sys.exit(0 if status == 2 else status)  # skipped points in results
 
 
 if __name__ == '__main__':

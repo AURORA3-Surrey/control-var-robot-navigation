@@ -36,7 +36,7 @@ Scripts for robot motion control, ROS 2 communication, and navigation.
   `vicon/run_vicon_bridge.bat`.<br>
   The bridge loads `/home/aurora3var/vicon_receiver_ws/fastdds_vicon_pc.xml` in WSL. If the address changes,
   change it there and on the robot.
-- Robot: `~/.bashrc` sets `ROS_STATIC_PEERS="10.78.115.63;10.78.113.197"` after the Clearpath line.
+- Robot: `~/.bashrc` sets `ROS_STATIC_PEERS="10.78.113.197"` (Polaris) after the Clearpath line.
 - Room frame: origin at the centre, `x` east (4.91 m), `y` north along the long side (7.97 m),
   yaw counter-clockwise from `x`.
 

@@ -188,7 +188,7 @@ class MotionNode(TimedNode):
 
 def run_motion(args, build_plan):
     # check the yaw offset, create the node, run build_plan(args, home), finish with a zero burst
-    # returns exit status, 0 only if the plan finished
+    # returns exit status, 0 plan finished, 1 aborted, 2 finished but points skipped
     require_fresh_yaw_offset(args, args.vicon_yaw_offset_deg)
     init_ros()
     node = MotionNode(args)
@@ -214,4 +214,4 @@ def run_motion(args, build_plan):
         if rclpy.ok():
             node.destroy_node()
             rclpy.shutdown()
-    return 1 if node.aborted else 0
+    return 1 if node.aborted else 2 if node.skipped else 0
