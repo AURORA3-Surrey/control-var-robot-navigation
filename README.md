@@ -24,6 +24,7 @@ Scripts for robot motion control, ROS 2 communication, and navigation.
   Starts `run_session.py`, results and log in `aurora3_sessions`.
 - `aurora3_client.py` Python client for the gatekeeper. `examples/` has a session template.
 - `room_gui.py` top-down room view, click to send the robot to a specific point.
+- `environment.yml` conda environment to run the GUI and ROS scripts off the robot.
 - `emergencystop.py` sends zero velocity and turns the motors off.
 - `vicon/connection_check.py` checks the Vicon connection.
 

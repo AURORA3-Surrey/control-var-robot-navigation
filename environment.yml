@@ -1,0 +1,13 @@
+# conda env create -f environment.yml, then conda activate aurora3
+
+name: VARaurora3
+channels:
+  - conda-forge
+  - robostack-jazzy
+dependencies:
+  - python=3.12
+  - ros-jazzy-ros-base
+  - pyqt=5
+variables:
+  ROS_DOMAIN_ID: "77"
+  ROS_STATIC_PEERS: "10.78.115.63;10.78.113.197"  # robot;vicon pc
