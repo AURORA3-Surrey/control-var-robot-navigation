@@ -20,6 +20,8 @@ Scripts for robot motion control, ROS 2 communication, and navigation.
 - `check_session.py` checks a session file (csv of points, `label,x,y,yaw_deg,wait_s`) against `room.json`.
   Format described at beginning of `session.py`.
 - `run_session.py` runs a session file and writes a results csv with the Vicon pose reached at each point.<br>
+- `gatekeeper.py` lets people on the local network send sessions to the robot over HTTP.<br>
+  Starts `run_session.py`, results and log in `aurora3_sessions`.
 - `emergencystop.py` sends zero velocity and turns the motors off.
 - `vicon/connection_check.py` checks the Vicon connection.
 
