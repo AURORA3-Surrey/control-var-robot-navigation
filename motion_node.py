@@ -60,6 +60,7 @@ class MotionNode(TimedNode):
         self.speed = 0.0         # [m/s]
         self.yaw_rate = 0.0      # [rad/s]
         self.aborted = False
+        self.skipped = []  # points not reached
         self.is_finished = False
 
         qos = QoSProfile(
@@ -163,6 +164,8 @@ class MotionNode(TimedNode):
                     f'final at ({fx:+.3f}, {fy:+.3f}) yaw {math.degrees(fyaw):+.1f} deg; '
                     f'dx={fx - self.home[0]:+.3f}m dy={fy - self.home[1]:+.3f}m '
                     f'dyaw={math.degrees(normalize(fyaw - self.home[2])):+.2f} deg')
+                if self.skipped:
+                    self.get_logger().error(f'skipped {len(self.skipped)} points: {self.skipped}')
                 self.get_logger().info('Complete!')
                 self.send(0.0, 0.0, 0.0)
                 self.is_finished = True

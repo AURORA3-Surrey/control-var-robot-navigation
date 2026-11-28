@@ -1,7 +1,7 @@
 # motion commands for the motion node, commands follow a minimum-jerk position profile
 # step(node, now) is called once per control tick and returns True when done
 # node is the MotionNode which provides 'args', 'pose()', 'send()', 'correct()',
-# 'verified_pose()', 'abort()', 'speed', 'yaw_rate', 'home' and the 'plan' queue
+# 'verified_pose()', 'abort()', 'skipped', 'speed', 'yaw_rate', 'home' and the 'plan' queue
 
 from nav_utils import clamp, normalize
 import math
@@ -168,9 +168,10 @@ class MoveTo(Command):
     # straight line to a point in the world frame
     name = 'move_to'
 
-    def __init__(self, target_x, target_y):
+    def __init__(self, target_x, target_y, retries=0):
         self.target_x = target_x
         self.target_y = target_y
+        self.retries = retries  # extra tries if not reached
         self.logged = False
 
     def step(self, node, now):
@@ -219,7 +220,14 @@ class MoveTo(Command):
             node.send(0.0, 0.0, 0.0)
             return True
         if elapsed >= T + a.homing_timeout:
-            node.get_logger().warning(
-                f'move_to residual {math.hypot(err_x, err_y):.3f}m at timeout')
+            residual = math.hypot(err_x, err_y)
+            if self.retries > 0:
+                node.get_logger().warning(f'move_to residual {residual:.3f}m at timeout, retrying')
+                node.plan.appendleft(MoveTo(self.target_x, self.target_y, self.retries - 1))
+            else:
+                node.get_logger().error(f'move_to residual {residual:.3f}m at timeout, skipped')
+                node.skipped.append((self.target_x, self.target_y))
+                while node.plan and not isinstance(node.plan[0], MoveTo):
+                    node.plan.popleft()
             return True
         return False

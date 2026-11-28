@@ -33,7 +33,7 @@ def build_goto_plan(args, home):
             sys.exit('\n  ' + '\n  '.join(problems))
     plan = [Wait(0.3)]
     for x, y, yaw in args.points:
-        plan.append(MoveTo(x, y))
+        plan.append(MoveTo(x, y, args.retries))
         if yaw is not None:
             plan.append(Turn(yaw))
         plan.append(Wait(args.wait))
@@ -47,6 +47,7 @@ def parse_args():
     p.add_argument('--room')
     p.add_argument('--no-room-check', action='store_true')
     p.add_argument('--wait', type=float, default=5.0)  # [s] at each point
+    p.add_argument('--retries', type=int, default=3)  # extra tries before skipping a point
     add_motion_arguments(p)
     args = p.parse_args()
     try:
