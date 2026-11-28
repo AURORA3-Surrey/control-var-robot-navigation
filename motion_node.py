@@ -57,6 +57,7 @@ class MotionNode(TimedNode):
         self.pose_seq = 0
         self.last_odom_time = None
         self.pose_stamp = None
+        self.last_vicon_msg = None
         self.speed = 0.0         # [m/s]
         self.yaw_rate = 0.0      # [rad/s]
         self.aborted = False
@@ -98,6 +99,10 @@ class MotionNode(TimedNode):
             return
         x = msg.pose.position.x
         y = msg.pose.position.y
+        raw = (x, y, q.x, q.y, q.z, q.w)
+        if raw == self.last_vicon_msg:
+            return  # tracker paused or in review
+        self.last_vicon_msg = raw
         yaw = normalize(yaw_from_quaternion(q) + math.radians(self.yaw_offset_deg))
         if not self.fusion.update_vicon(x, y, yaw, self.get_time_sec()):
             self.get_logger().warning('vicon pose rejected', throttle_duration_sec=1.0)
@@ -153,7 +158,7 @@ class MotionNode(TimedNode):
             self.abort('odometry stale')
             return
         if now - self.fusion.vicon_time > self.args.vicon_timeout:
-            self.abort('vicon pose missing or rejected')
+            self.abort('vicon pose missing, frozen or rejected')
             return
 
         # if no current command get next from plan
