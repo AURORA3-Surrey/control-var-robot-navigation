@@ -17,7 +17,7 @@ source "${ROS_SETUP:-/opt/ros/jazzy/setup.bash}" || { echo "ROS 2 jazzy setup.ba
 set -u
 export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-77}"
-export ROS_STATIC_PEERS="${ROS_STATIC_PEERS:-10.78.24.110}"
+export ROS_STATIC_PEERS="${ROS_STATIC_PEERS:-10.78.115.63;10.78.113.197}"
 
 cd "$(dirname "$0")/.." || exit 1
 for f in demo/grid.py motion_node.py motion_commands.py nav_utils.py; do
