@@ -12,6 +12,8 @@ Scripts for robot motion control, ROS 2 communication, and navigation.
 - `vicon_to_odom.py` republishes the Vicon pose as `nav_msgs/Odometry`. 
   It also needs a yaw calibration from the same day.
 - `demo/grid_loop.sh` loops `demo/grid.py` for demos.
+- `vicon_goto.py` moves the robot to points given in Vicon coordinates (`--point x y [yaw_deg]`) after checking them against `room.json`.<br>
+  Needs a yaw calibration from the same day.
 - `room.json` has room limits in Vicon coordinates and the speeds for sessions.<br>
   A keep-out box is `[x0, y0, x1, y1]`, two opposite corners in metres. To measure one, push the robot against the
   obstacle, use `ros2 topic echo --once --field pose.position /vicon/Dingo/Dingo` and add 0.259 m (side) 0.343 m (front).
