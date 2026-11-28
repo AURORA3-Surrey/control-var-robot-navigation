@@ -19,6 +19,7 @@ Scripts for robot motion control, ROS 2 communication, and navigation.
   obstacle, use `ros2 topic echo --once --field pose.position /vicon/Dingo/Dingo` and add 0.259 m (side) 0.343 m (front).
 - `check_session.py` checks a session file (csv of points, `label,x,y,yaw_deg,wait_s`) against `room.json`.
   Format described at beginning of `session.py`.
+- `run_session.py` runs a session file and writes a results csv with the Vicon pose reached at each point.<br>
 - `emergencystop.py` sends zero velocity and turns the motors off.
 - `vicon/connection_check.py` checks the Vicon connection.
 

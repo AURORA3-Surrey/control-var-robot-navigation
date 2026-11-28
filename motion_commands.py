@@ -101,6 +101,9 @@ class Command:
     def step(self, node, now):
         raise NotImplementedError
 
+    def skip(self):
+        pass  # called when point is skipped
+
 
 class Wait(Command):
     name = 'wait'
