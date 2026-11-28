@@ -3,7 +3,6 @@
 import argparse
 import json
 import math
-import os
 import shlex
 import signal
 import subprocess
@@ -130,7 +129,7 @@ class RoomGui(QWidget):
 
     def stop(self):
         if self.proc:
-            self.proc.send_signal(signal.SIGINT)
+            self.proc.terminate()  # robot side gets SIGHUP and stops
             self.say('stopping', 'blue')
 
     def refresh(self):
@@ -159,9 +158,13 @@ class RoomGui(QWidget):
 
 
 def goto_command(args, x, y):
-    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vicon_goto.py')
-    return [sys.executable, script, '--room', args.room, '--vicon-topic', args.vicon_topic,
+    # runs vicon_goto.py on the robot with its room.json and yaw calibration
+    goto = ['flock', '-n', '--verbose', '/tmp/vicon_goto.lock', 'python3', 'vicon_goto.py',
+            '--room', 'room.json', '--vicon-topic', args.vicon_topic,
             '--point', f'{x:.3f}', f'{y:.3f}', *shlex.split(args.goto_args)]
+    remote = f'cd aurora3-nav && exec {shlex.join(goto)}'
+    return ['ssh', '-tt', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR', args.robot,
+            'bash', '-ic', shlex.quote(remote)]
 
 
 def parse_args():
@@ -170,6 +173,7 @@ def parse_args():
     p.add_argument('--vicon-topic', default='/vicon/Dingo/Dingo')
     p.add_argument('--robot-size', type=float, nargs=2, default=(0.686, 0.517))
     p.add_argument('--goto-args', default='')
+    p.add_argument('--robot', default='robot@10.78.115.148')
     add_yaw_offset_arguments(p, '--vicon-yaw-offset-deg')
     return p.parse_args()
 
@@ -184,7 +188,8 @@ def main():
     app = QApplication(sys.argv[:1])
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # ctrl-c closes
     gui = RoomGui(room, args.robot_size, lambda x, y, log: subprocess.Popen(
-        goto_command(args, x, y), stdout=log, stderr=subprocess.STDOUT))
+        goto_command(args, x, y), stdin=subprocess.DEVNULL, stdout=log,
+        stderr=subprocess.STDOUT))
 
     def on_vicon(msg):
         q = msg.pose.orientation
