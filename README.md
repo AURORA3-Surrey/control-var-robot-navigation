@@ -22,6 +22,7 @@ Scripts for robot motion control, ROS 2 communication, and navigation.
 - `run_session.py` runs a session file and writes a results csv with the Vicon pose reached at each point.<br>
 - `gatekeeper.py` lets people on the local network send sessions to the robot over HTTP.<br>
   Starts `run_session.py`, results and log in `aurora3_sessions`.
+- `aurora3_client.py` Python client for the gatekeeper. `examples/` has a session template.
 - `emergencystop.py` sends zero velocity and turns the motors off.
 - `vicon/connection_check.py` checks the Vicon connection.
 
@@ -37,8 +38,7 @@ vicon_yaw_calibration.py ─────────┴─► nav_utils.py      
 ```
 
 `motion_node.py` holds `MotionNode` and `run_motion()`. The node follows the odometry (smooth pose and speed) and `PoseFusion` in
-`nav_utils.py` pulls it towards the Vicon pose (with the yaw offset), so a short Vicon gap does not stop the run.
-It aborts if the odometry is stale (0.5 s) or no Vicon sample was accepted for 3 s.
+`nav_utils.py` pulls it towards the Vicon pose (with the yaw offset). It aborts if the odometry is stale (0.5 s) or no Vicon sample was accepted for 3 s.
 `demo/grid.py` contains the grid planner (`build_grid_plan`).
 
 To add a new motion, add a `Command` subclass in `motion_commands.py` with a `step(node, now)` method
@@ -46,6 +46,4 @@ and queue it in the plan builder (`build_grid_plan()` in `demo/grid.py`).
 
 ## Robot-side code
 
-Copy everything (the scripts import each other).
-
-`vicon_yaw_offset.json` is written next to the scripts by `vicon_yaw_calibration.py` and read from there by `demo/grid.py` and `vicon_to_odom.py`.
+Copy everything. `vicon_yaw_offset.json` is written next to the scripts by `vicon_yaw_calibration.py` and read from there by `demo/grid.py` and `vicon_to_odom.py`.

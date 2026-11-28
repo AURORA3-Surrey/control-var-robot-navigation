@@ -231,6 +231,6 @@ class MoveTo(Command):
                 node.get_logger().error(f'move_to residual {residual:.3f}m at timeout, skipped')
                 node.skipped.append((self.target_x, self.target_y))
                 while node.plan and not isinstance(node.plan[0], MoveTo):
-                    node.plan.popleft()
+                    node.plan.popleft().skip()
             return True
         return False
